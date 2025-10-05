@@ -1,0 +1,13 @@
+node_modules
+pnpm-lock.yaml
+dist
+.expo
+.expo-shared
+.env
+app/.env
+server/.env
+app/.expo
+app/.expo-shared
+app/assets/*.png
+server/prisma/*.db
+*.docx
