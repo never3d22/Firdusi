@@ -17,6 +17,20 @@ Mandatory environment variables:
   SSH_PORT             Порт SSH (по умолчанию 22)
   REMOTE_DIR           Путь на сервере, куда будет скопирован docker-compose (по умолчанию /opt/codex/mysql)
   REMOTE_REPO_DIR      Путь до каталога проекта на сервере. Если указан, скрипт применит Prisma миграции и сиды.
+  SMSRU_API_KEY        Если указать, будет записан в server/.env (по умолчанию генерируется заглушка demo-sms-key)
+  JWT_ACCESS_SECRET    32+ символов. Если не указать — будет сгенерирован случайный hex
+  JWT_REFRESH_SECRET   32+ символов. Если не указать — будет сгенерирован случайный hex
+  REFRESH_TOKEN_SALT   16+ символов. Если не указать — будет сгенерирован случайный hex
+  JWT_ACCESS_TTL       Время жизни access-токена (по умолчанию 15m)
+  JWT_REFRESH_TTL      Время жизни refresh-токена (по умолчанию 30d)
+  RATE_LIMIT_WINDOW    Окно rate-limit в мс (по умолчанию 60000)
+  RATE_LIMIT_MAX       Число запросов на окно (по умолчанию 5)
+  STRIPE_PUBLISHABLE_KEY / STRIPE_SECRET_KEY
+                       Ключи Stripe (по умолчанию пустые)
+  PAYMENT_PROVIDER     mock или stripe (по умолчанию mock)
+  PUBLIC_WEB_APP_URL   Публичный URL фронтенда (по умолчанию https://example.com)
+  ADMIN_DEFAULT_PASSWORD
+                       Пароль администратора для сидов (по умолчанию 1234)
 
 Опции:
   --repo-dir PATH      Путь до локального каталога с репозиторием (если запускаете не из корня).
@@ -25,6 +39,11 @@ USAGE
 }
 
 REPO_DIR="$(pwd)"
+
+cleanup() {
+  rm -f "${TMP_ENV:-}"
+  rm -f "${TMP_SERVER_ENV:-}"
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -60,6 +79,16 @@ REMOTE_REPO_DIR="${REMOTE_REPO_DIR:-}"
 PNPM_VERSION="8.15.4"
 REMOTE_PNPM_CMD="pnpm"
 
+random_hex() {
+  python3 - "$1" <<'PY'
+import secrets
+import sys
+
+length = int(sys.argv[1])
+print(secrets.token_hex(length), end='')
+PY
+}
+
 SCRIPT_DIR="${REPO_DIR%/}/server/scripts"
 COMPOSE_FILE="$SCRIPT_DIR/mysql-docker-compose.yml"
 
@@ -69,7 +98,8 @@ if [[ ! -f "$COMPOSE_FILE" ]]; then
 fi
 
 TMP_ENV="$(mktemp)"
-trap 'rm -f "$TMP_ENV"' EXIT
+TMP_SERVER_ENV=""
+trap cleanup EXIT
 
 cat > "$TMP_ENV" <<ENV
 MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
@@ -120,13 +150,59 @@ if [[ -n "$REMOTE_REPO_DIR" ]]; then
   ssh_cmd "cd $REMOTE_REPO_DIR && $REMOTE_PNPM_CMD install --filter server"
 
   DB_URL="mysql://$MYSQL_USER:$MYSQL_PASSWORD@127.0.0.1:3306/$MYSQL_DATABASE"
-  printf -v DB_URL_ESCAPED '%q' "$DB_URL"
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "Необходим python3 для генерации секретов" >&2
+    exit 1
+  fi
+
+  SMSRU_API_KEY_VALUE="${SMSRU_API_KEY:-demo-sms-key}"
+  JWT_ACCESS_SECRET_VALUE="${JWT_ACCESS_SECRET:-$(random_hex 32)}"
+  JWT_REFRESH_SECRET_VALUE="${JWT_REFRESH_SECRET:-$(random_hex 32)}"
+  REFRESH_TOKEN_SALT_VALUE="${REFRESH_TOKEN_SALT:-$(random_hex 16)}"
+  JWT_ACCESS_TTL_VALUE="${JWT_ACCESS_TTL:-15m}"
+  JWT_REFRESH_TTL_VALUE="${JWT_REFRESH_TTL:-30d}"
+  RATE_LIMIT_WINDOW_VALUE="${RATE_LIMIT_WINDOW:-60000}"
+  RATE_LIMIT_MAX_VALUE="${RATE_LIMIT_MAX:-5}"
+  STRIPE_PUBLISHABLE_KEY_VALUE="${STRIPE_PUBLISHABLE_KEY:-}"
+  STRIPE_SECRET_KEY_VALUE="${STRIPE_SECRET_KEY:-}"
+  PAYMENT_PROVIDER_VALUE="${PAYMENT_PROVIDER:-mock}"
+  PUBLIC_WEB_APP_URL_VALUE="${PUBLIC_WEB_APP_URL:-https://example.com}"
+  ADMIN_DEFAULT_PASSWORD_VALUE="${ADMIN_DEFAULT_PASSWORD:-1234}"
+
+  TMP_SERVER_ENV="$(mktemp)"
+  cat > "$TMP_SERVER_ENV" <<ENV
+NODE_ENV=production
+PORT=3000
+DATABASE_URL="$DB_URL"
+SMSRU_API_KEY="$SMSRU_API_KEY_VALUE"
+JWT_ACCESS_SECRET="$JWT_ACCESS_SECRET_VALUE"
+JWT_REFRESH_SECRET="$JWT_REFRESH_SECRET_VALUE"
+JWT_ACCESS_TTL="$JWT_ACCESS_TTL_VALUE"
+JWT_REFRESH_TTL="$JWT_REFRESH_TTL_VALUE"
+REFRESH_TOKEN_SALT="$REFRESH_TOKEN_SALT_VALUE"
+RATE_LIMIT_WINDOW=$RATE_LIMIT_WINDOW_VALUE
+RATE_LIMIT_MAX=$RATE_LIMIT_MAX_VALUE
+STRIPE_PUBLISHABLE_KEY="$STRIPE_PUBLISHABLE_KEY_VALUE"
+STRIPE_SECRET_KEY="$STRIPE_SECRET_KEY_VALUE"
+PAYMENT_PROVIDER="$PAYMENT_PROVIDER_VALUE"
+PUBLIC_WEB_APP_URL="$PUBLIC_WEB_APP_URL_VALUE"
+ADMIN_DEFAULT_PASSWORD="$ADMIN_DEFAULT_PASSWORD_VALUE"
+ENV
+
+  REMOTE_ENV_PATH="$REMOTE_REPO_DIR/server/.env"
+  TIMESTAMP="$(date +%s)"
+  echo "Обновляем $REMOTE_ENV_PATH на сервере..."
+  ssh_cmd "mkdir -p '$REMOTE_REPO_DIR/server'"
+  ssh_cmd "[[ -f '$REMOTE_ENV_PATH' ]] && cp '$REMOTE_ENV_PATH' '$REMOTE_ENV_PATH.bak.$TIMESTAMP' || true"
+  scp -P "$SSH_PORT" "$TMP_SERVER_ENV" "$SSH_USER@$SSH_HOST:$REMOTE_ENV_PATH.tmp"
+  ssh_cmd "mv '$REMOTE_ENV_PATH.tmp' '$REMOTE_ENV_PATH'"
 
   echo "Применяем Prisma миграции..."
-  ssh_cmd "cd $REMOTE_REPO_DIR && DATABASE_URL=$DB_URL_ESCAPED $REMOTE_PNPM_CMD --filter server prisma:migrate deploy"
+  ssh_cmd "cd $REMOTE_REPO_DIR && DATABASE_URL='$DB_URL' $REMOTE_PNPM_CMD --filter server prisma:migrate deploy"
 
   echo "Запускаем сиды базы данных..."
-  ssh_cmd "cd $REMOTE_REPO_DIR && DATABASE_URL=$DB_URL_ESCAPED $REMOTE_PNPM_CMD --filter server prisma:seed"
+  ssh_cmd "cd $REMOTE_REPO_DIR && DATABASE_URL='$DB_URL' $REMOTE_PNPM_CMD --filter server prisma:seed"
   echo "Prisma миграции и сиды применены."
 fi
 
