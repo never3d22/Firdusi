@@ -149,10 +149,14 @@ pnpm test
 ### 1. Подключаемся к серверу
 
 ```bash
-ssh root@IP_СЕРВЕРА
+ssh root@84.54.30.199
 ```
 
+> Пароль: `x*LY4aidrrjm`. Его можно вставить в терминал средней кнопкой мыши или Shift+Insert. Ничего не отображается — это нормальное поведение Linux.
+
 Если система попросит «Are you sure you want to continue connecting (yes/no/[fingerprint])?» — введите `yes` и нажмите Enter.
+
+> После первого входа настоятельно рекомендую сменить пароль командой `passwd` (для root) и записать новый в безопасное место.
 
 ### 2. Создаём отдельного пользователя (не работать под root!)
 
@@ -170,15 +174,22 @@ su - codex
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y build-essential curl git nginx mysql-server ufw
 
-# Установка Node.js 20 и pnpm
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
+# Проверяем, что Node.js уже стоит (Beget ставит 22.x)
+node -v
+
+# Если версия ниже 20 — переустановите:
+# curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# sudo apt install -y nodejs
+
+# Включаем corepack и pnpm
 corepack enable
 corepack prepare pnpm@8.15.4 --activate
 
 # PM2 для управления процессами
 pnpm add -g pm2
 ```
+
+Если `node -v` показывает `v22.x.x`, всё готово — переустанавливать не нужно.
 
 ### 4. Настраиваем MySQL и создаём базу
 
@@ -218,7 +229,7 @@ nano .env
 Внутри файла замените заглушки на реальные значения (см. подсказки в самом `.env`).
 
 - `DATABASE_URL` — укажите логин/пароль MySQL, созданный на шаге 4.
-- `PUBLIC_WEB_APP_URL` и `CORS_ORIGINS` (если вы их настраиваете) можно сразу выставить в `https://roteelonoogu.beget.app`.
+- `PUBLIC_WEB_APP_URL` и `CORS_ORIGINS` (если вы их настраиваете) можно сразу выставить в `https://ginidasipcef.beget.app`.
 - Если вы уже знаете внешний IP сервера, запишите его отдельно — он пригодится для проверки DNS.
 
 Сохраните файл (в nano: `Ctrl+O`, Enter, затем `Ctrl+X`).
@@ -244,10 +255,10 @@ pm2 startup systemd
 
 ### 8.1. Проверяем DNS перед настройкой Nginx
 
-Убедитесь, что домен `roteelonoogu.beget.app` в панели Beget указывает на IP вашего сервера. Проще всего сделать это командой:
+Убедитесь, что домен `ginidasipcef.beget.app` в панели Beget указывает на IP вашего сервера (сейчас он должен быть `84.54.30.199`). Проще всего сделать это командой:
 
 ```bash
-dig +short roteelonoogu.beget.app
+dig +short ginidasipcef.beget.app
 ```
 
 Если в ответе тот же IP, что и у сервера, можно двигаться дальше. Если нет — зайдите в DNS-настройки Beget, обновите A-запись, подождите 5–10 минут и повторите проверку.
@@ -261,7 +272,7 @@ sudo cp deploy.nginx.conf /etc/nginx/sites-available/codex.conf
 sudo nano /etc/nginx/sites-available/codex.conf
 ```
 
-В конфиге уже указан `server_name roteelonoogu.beget.app;`. Если домен совпадает — ничего не меняйте. Если используете другой домен или хотите временно принимать запросы по IP, поправьте строку и сохраните файл. Затем включите конфиг:
+В конфиге уже указан `server_name ginidasipcef.beget.app;`. Если домен совпадает — ничего не меняйте. Если используете другой домен или хотите временно принимать запросы по IP, поправьте строку и сохраните файл. Затем включите конфиг:
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/codex.conf /etc/nginx/sites-enabled/codex.conf
@@ -273,15 +284,15 @@ sudo systemctl reload nginx
 
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d roteelonoogu.beget.app
+sudo certbot --nginx -d ginidasipcef.beget.app
 ```
 
 Certbot задаст несколько вопросов (email, согласие, нужно ли редиректить HTTP → HTTPS). Отвечайте «Yes».
 
 ### 11. Проверяем, что всё живо
 
-1. Откройте `https://roteelonoogu.beget.app/trpc` в браузере — должна появиться ошибка `POST only` (значит Fastify жив).
-2. Откройте Expo клиент, укажите `EXPO_PUBLIC_API_URL=https://roteelonoogu.beget.app/trpc` (значение уже есть в `.env.example`) и проверьте авторизацию.
+1. Откройте `https://ginidasipcef.beget.app/trpc` в браузере — должна появиться ошибка `POST only` (значит Fastify жив).
+2. Откройте Expo клиент, укажите `EXPO_PUBLIC_API_URL=https://ginidasipcef.beget.app/trpc` (значение уже есть в `.env.example`) и проверьте авторизацию.
 3. Зайдите в админку, закройте приложение и убедитесь, что при повторном открытии вы всё ещё авторизованы.
 
 ### 12. Что делать, если после перезагрузки всё пропало
