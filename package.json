@@ -1,0 +1,11 @@
+{
+  "name": "codex",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Codex restaurant ordering platform",
+  "scripts": {
+    "postinstall": "pnpm --filter server install && pnpm --filter app install"
+  },
+  "devDependencies": {},
+  "packageManager": "pnpm@8.15.4"
+}

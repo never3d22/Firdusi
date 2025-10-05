@@ -1,0 +1,132 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  COOKING
+  READY
+  DELIVERING
+  DONE
+  CANCELED
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  phone        String    @unique
+  name         String?
+  role         UserRole  @default(CUSTOMER)
+  passwordHash String?
+  createdAt    DateTime  @default(now())
+
+  addresses    Address[]
+  orders       Order[]
+  refreshTokens RefreshToken[]
+}
+
+model Address {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  label     String
+  street    String
+  city      String
+  comment   String?
+  lat       Float?
+  lng       Float?
+  createdAt DateTime @default(now())
+
+  orders    Order[]
+}
+
+model Category {
+  id        Int      @id @default(autoincrement())
+  name      String
+  position  Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  dishes    Dish[]
+
+  @@index([position])
+}
+
+model Dish {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  priceCents  Int
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId  Int
+  createdAt   DateTime @default(now())
+
+  orderItems  OrderItem[]
+
+  @@index([categoryId])
+}
+
+model Order {
+  id          Int          @id @default(autoincrement())
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  status      OrderStatus  @default(PENDING)
+  items       OrderItem[]
+  address     Address?     @relation(fields: [addressId], references: [id])
+  addressId   Int?
+  totalCents  Int
+  paymentId   String?
+  createdAt   DateTime     @default(now())
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id         Int   @id @default(autoincrement())
+  order      Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId    Int
+  dish       Dish  @relation(fields: [dishId], references: [id])
+  dishId     Int
+  qty        Int
+  priceCents Int
+
+  @@index([orderId])
+}
+
+model RestaurantSetting {
+  id            Int     @id @default(1)
+  name          String  @default("Firdusi")
+  phone         String?
+  address       String?
+  isOpen        Boolean @default(true)
+  workingHours  Json?
+}
+
+model RefreshToken {
+  id            Int      @id @default(autoincrement())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        Int
+  tokenHash     String
+  userAgentHash String
+  ipHash        String
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  revokedAt     DateTime?
+
+  @@index([userId])
+  @@index([tokenHash])
+}
