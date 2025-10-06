@@ -141,23 +141,33 @@
 
 ### 7. Мобильное приложение (Expo)
 
-1. Перейдите в каталог клиента и подготовьте переменные окружения:
+1. Подготовьте учётные данные Expo:
+   - Доступ к аккаунту Expo (логин/пароль или заранее созданный `EXPO_TOKEN` с правами на проект; токен можно выпустить командой
+     `pnpm dlx eas-cli token:create`).
+   - Значения `owner`, `slug` и `expo.projectId` из `app.json`/`app.config.ts` (убедитесь, что они совпадают с проектом в https://expo.dev/ ).
+   - При необходимости добавьте `EXPO_TOKEN` в `~/.bashrc`/`~/.zshrc`, чтобы команда EAS могла выполняться без запроса пароля:
+     ```bash
+     echo 'export EXPO_TOKEN="<ваш_expo_token>"' >> ~/.bashrc
+     source ~/.bashrc
+     ```
+
+2. Перейдите в каталог клиента и подготовьте переменные окружения:
    ```bash
    cd /var/www/codex/app
    cp .env.example .env
    nano .env
    ```
    Обновите `EXPO_PUBLIC_API_URL` (указывает на `https://<ваш_домен>/trpc`) и `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY`.
-2. Сгенерируйте актуальные ассеты (если вы меняли иконки/сплэши):
+3. Сгенерируйте актуальные ассеты (если вы меняли иконки/сплэши):
    ```bash
    pnpm --filter app run generate:assets
    ```
-3. Для тестирования в Expo Go запустите дев-сервер с туннелем:
+4. Для тестирования в Expo Go запустите дев-сервер с туннелем:
    ```bash
    pnpm --filter app dev -- --tunnel
    ```
    В Expo Go отсканируйте QR-код из терминала и убедитесь, что приложение обращается к боевому API.
-4. Для продакшн-сборки используйте EAS Build (требуется аккаунт Expo):
+5. Для продакшн-сборки используйте EAS Build (требуется аккаунт Expo):
    ```bash
    pnpm dlx eas-cli login
    pnpm dlx eas-cli build --platform android --profile production
