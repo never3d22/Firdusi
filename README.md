@@ -139,7 +139,33 @@
    ```
    В процессе подтвердите почту и включите редирект HTTP→HTTPS.
 
-### 7. Финальная проверка
+### 7. Мобильное приложение (Expo)
+
+1. Перейдите в каталог клиента и подготовьте переменные окружения:
+   ```bash
+   cd /var/www/codex/app
+   cp .env.example .env
+   nano .env
+   ```
+   Обновите `EXPO_PUBLIC_API_URL` (указывает на `https://<ваш_домен>/trpc`) и `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY`.
+2. Сгенерируйте актуальные ассеты (если вы меняли иконки/сплэши):
+   ```bash
+   pnpm --filter app run generate:assets
+   ```
+3. Для тестирования в Expo Go запустите дев-сервер с туннелем:
+   ```bash
+   pnpm --filter app dev -- --tunnel
+   ```
+   В Expo Go отсканируйте QR-код из терминала и убедитесь, что приложение обращается к боевому API.
+4. Для продакшн-сборки используйте EAS Build (требуется аккаунт Expo):
+   ```bash
+   pnpm dlx eas-cli login
+   pnpm dlx eas-cli build --platform android --profile production
+   pnpm dlx eas-cli build --platform ios --profile production
+   ```
+   Готовые артефакты будут доступны в разделе «Builds» на https://expo.dev/accounts/<your-account>/projects/codex-app/builds.
+
+### 8. Финальная проверка
 
 1. Убедитесь, что API отвечает: откройте `https://<ваш_домен>/trpc` — должна появиться ошибка `POST only` (это нормально).
 2. Проверьте логи backend'а:
@@ -147,7 +173,6 @@
    pm2 status
    pm2 logs --lines 100
    ```
-3. Настройте Expo-клиент: в `.env` приложения укажите `EXPO_PUBLIC_API_URL=https://<ваш_домен>/trpc` и соберите приложение.
-4. После перезагрузки сервера убедитесь, что PM2 восстановил процессы: `pm2 resurrect`.
+3. После перезагрузки сервера восстановите процессы: `pm2 resurrect`.
 
 На этом развёртывание завершено: приложение доступно по HTTPS, backend работает под управлением PM2, а база данных защищена локальным доступом.
